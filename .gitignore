@@ -1,0 +1,21 @@
+# Binaries and build output
+/bin/
+/dist/
+/minikv
+/minikv.exe
+coverage.out
+coverage/
+
+# Runtime data — never commit
+data/
+*.wal
+*.snapshot
+*.db
+
+# Environment and logs
+.env
+logs/
+tmp/
+
+# Editors and OS files
+.DS_Store
