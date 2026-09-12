@@ -3,8 +3,8 @@
 ## Current Status
 
 - Project: MiniKV
-- Current phase: Phase 1 — Foundation
-- Overall progress: 0 of 6 phases complete (Phase 1 implementation done; race test pending)
+- Current phase: Phase 2 — Core Engine
+- Overall progress: 0 of 6 phases complete (Phases 1–2 implemented; race test pending toolchain)
 - Status: In progress
 - Last updated: 2026-09-12
 - Specification: `docs/MASTER_BUILD_PROMPT.md`
@@ -18,7 +18,7 @@ No phase may be marked complete without factual quality-gate evidence.
 ## Phase Overview
 
 - [ ] Phase 1 — Foundation (implementation complete; blocked on `go test -race` by missing C compiler)
-- [ ] Phase 2 — Core Engine
+- [ ] Phase 2 — Core Engine (implementation complete; same race-test blocker)
 - [ ] Phase 3 — Persistence
 - [ ] Phase 4 — Interfaces
 - [ ] Phase 5 — Quality and Benchmarks
@@ -60,26 +60,31 @@ Known limitations:
 
 ## Phase 2 — Core Engine
 
-Status: Not started
+Status: Implementation complete — race test pending (environment blocker, same as Phase 1)
 
 Scope:
 
-- [ ] In-memory key-value store
-- [ ] GET / SET / DELETE
-- [ ] Key listing
-- [ ] TTL expiration
-- [ ] Sharded locking
-- [ ] Statistics
-- [ ] Unit tests
-- [ ] Race-safe implementation
+- [x] In-memory key-value store (`internal/engine/store.go`: sharded Store, 32 default shards, FNV-1a routing)
+- [x] GET / SET / DELETE (Engine interface, copy-on-Set, KeyNotFound/InvalidKey/InvalidValue/InvalidTTL kinds)
+- [x] Key listing (Keys, sorted, expired keys never returned)
+- [x] TTL expiration (lazy on access + janitor goroutine in ttl.go; expired behave as missing)
+- [x] Sharded locking (one RWMutex per shard; never hold two shard locks; atomics for global counters)
+- [x] Statistics (Stats: key count, puts, gets, hits, deletes, expired, shard count, uptime, HitRate)
+- [x] Unit tests (CRUD, TTL lazy + janitor, validation, closed store, copy isolation, shard distribution, counters)
+- [x] Race-safe implementation (deferred race-detector run; concurrent tests written and passing without -race)
 
 Validation:
 
-- gofmt: Not run
-- go vet: Not run
-- Unit tests: Not run
-- Race tests: Not run
-- Build: Not run
+- gofmt: Passed — `gofmt -w .` clean
+- go vet: Passed — `go vet ./...` exit 0 (after removing an unused import caught by vet)
+- Unit tests: Passed — `go test ./... -count=1` all 7 packages ok (one flaky Uptime assertion fixed with a 2ms sleep)
+- Race tests: Not run — same environment blocker as Phase 1: `-race` requires cgo, no C compiler on this Windows machine. Concurrent tests (8 workers × mixed ops; TTL writer vs snapshot reader) pass without the race detector.
+- Build: Passed — `go build ./...` exit 0
+
+Known limitations:
+
+- Race-detector evidence still pending for both phases; concurrency correctness is asserted by tests only.
+- Get returns a slice aliasing internal storage (documented); Snapshot/Set copy.
 
 ---
 
@@ -184,10 +189,10 @@ Validation:
 
 ## Global Validation Summary
 
-- gofmt: Passed (2026-09-12)
+- gofmt: Passed (2026-09-12, after each milestone)
 - go vet ./...: Passed (2026-09-12)
-- go test ./...: Passed (2026-09-12) — all 7 packages ok
-- go test -race ./...: Not run — requires cgo; no C compiler installed (gcc not found). Impact: concurrency correctness not machine-verified; Phase 1 has no concurrent code. Next: install MinGW-w64 or validate on a machine with a C toolchain.
+- go test ./...: Passed (2026-09-12) — all 7 packages ok, -count=1
+- go test -race ./...: Not run — requires cgo; no C compiler installed (gcc not found). Impact: concurrency correctness not machine-verified for the Phase 2 store. Next: install MinGW-w64 or validate on a machine with a C toolchain.
 - Integration tests: Not applicable yet (harness sanity test runs inside `go test ./...`)
 - Benchmarks: Not run (no benchmarks exist yet)
 - go build ./...: Passed (2026-09-12)
@@ -198,29 +203,30 @@ Validation:
 
 ## Known Limitations
 
-- Project implementation has not started for phases 2–6.
+- Project implementation has not started for phases 3–6.
 - No performance numbers exist yet.
 - No phase is verified complete.
 - No release artifact exists.
-- `go test -race` is blocked on this Windows machine by a missing C toolchain (cgo requirement).
+- `go test -race` is blocked on this Windows machine by a missing C toolchain (cgo requirement); Phase 2 concurrency verified by tests only.
+- Store.Get returns a read-only view of internal storage; callers must not mutate (documented in code).
 
 ---
 
 ## Session Handoff
 
 - Date: 2026-09-12
-- Phase: Phase 1 — Foundation
-- Session goal: Complete Phase 1 foundation and pass the quality gate
-- Completed: go.mod; repository structure; typed error model; structured logging; config with validation; Engine interface + Stats + limits; CLI entry point (version/help, exit codes); unit tests for all packages; README skeleton; docs/development.md; hygiene files
-- Current milestone: Phase 1 race-test evidence pending; otherwise implementation and gate are done
-- Files changed: go.mod, .gitignore, .editorconfig, LICENSE, README.md, docs/development.md, cmd/minikv/{main.go,main_test.go}, internal/engine/{engine.go,engine_test.go}, internal/kverrors/{kverrors.go,kverrors_test.go}, internal/config/{config.go,config_test.go}, internal/logging/{logging.go,logging_test.go}, internal/version/version.go, tests/integration_test.go, PROGRESS.md
-- Commands actually run: `git status`, `git log --oneline -10`, `go version`, `gofmt -w .`, `go build ./...`, `go vet ./...`, `go test ./...`, `go test -race ./...` (failed to build: cgo/gcc missing), `which gcc cc clang` (not found), `CGO_ENABLED=1 go test -race ./...` (failed: gcc not found)
-- Test results: PASS — go test ./... (cmd/minikv, internal/config, internal/engine, internal/kverrors, internal/logging, tests all ok)
+- Phase: Phase 2 — Core Engine (Phases 1–2 implemented)
+- Session goal: Complete Phase 2 sharded store with TTL, stats, and tests
+- Completed: Phase 1 committed earlier (7257c0d): module, error model, logging, config, Engine contract, CLI entry, docs. Phase 2: sharded Store implementing Engine (Get/Set/Delete/Keys/Snapshot/Stats/Close), lazy + janitor TTL, copy semantics, unit + concurrent tests
+- Current milestone: Phase 2 done pending race evidence
+- Files changed: internal/engine/store.go (new), internal/engine/ttl.go (new), internal/engine/store_test.go (new), PROGRESS.md
+- Commands actually run: `gofmt -w .`, `go build ./...`, `go vet ./...`, `go test ./...` (caught unused import; fixed), `go test ./... -count=1`, `go test ./internal/engine/ -count=1`, `go test ./internal/engine/ -count=1 -race` (failed: cgo/gcc missing)
+- Test results: PASS — all 7 packages ok with -count=1
 - Race test result: Not run — blocked: -race requires cgo, no C compiler on machine
 - go vet result: PASS — no findings
-- Benchmark result: Not run — no benchmarks exist yet
+- Benchmark result: Not run — benchmarks planned for Phase 5
 - Build result: PASS — go build ./...
-- Known limitations: race detector unusable on this machine without a C toolchain
+- Known limitations: race detector unusable on this machine; Get aliases internal storage (documented)
 - Blockers: `go test -race` needs MinGW-w64 gcc (or equivalent) with CGO_ENABLED=1
-- Next exact action: When a C toolchain is available, run `CGO_ENABLED=1 go test -race ./...`; if it passes, mark Phase 1 complete in Phase Overview and start Phase 2 (Core Engine): implement sharded in-memory store with GET/SET/DELETE/Keys/TTL/Stats against the existing Engine interface, with table-driven and concurrent tests. Alternatively, proceed with Phase 2 implementation and run the race gate for both phases once a compiler is available.
+- Next exact action: Begin Phase 3 (Persistence): implement framed WAL format (magic, version, op type, key-len, value-len, expiration, CRC32) in internal/persistence/wal.go with append + replay; then atomic snapshots and crash recovery; persistence tests with temp dirs; report corruption with file and byte offset, never truncate silently
 - Git commit: (this commit)
