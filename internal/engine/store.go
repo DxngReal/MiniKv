@@ -206,16 +206,23 @@ func (s *Store) Set(key string, value []byte, expiresAt *time.Time) (bool, error
 	if err := ValidateValue(value, s.maxValue); err != nil {
 		return false, err
 	}
+	if expiresAt != nil && !expiresAt.IsZero() && !expiresAt.After(time.Now()) {
+		return false, kverrors.New(kverrors.InvalidTTL, op,
+			"expiration time is in the past; expired entries behave as missing ones")
+	}
+	return s.applySet(key, value, expiresAt)
+}
+
+// applySet stores the entry without re-validating: it is the single write
+// path shared by the public Set and the durable engine's post-append apply.
+// A lapsed deadline is accepted here on purpose — the entry is then dead on
+// arrival and behaves exactly like a missing one, which matches how WAL
+// replay treats an expired record (skip). This is what keeps memory and log
+// consistent when an fsync outlives a short TTL.
+func (s *Store) applySet(key string, value []byte, expiresAt *time.Time) (bool, error) {
 	exp := time.Time{}
-	if expiresAt != nil {
-		if expiresAt.IsZero() {
-			exp = time.Time{}
-		} else if !expiresAt.After(time.Now()) {
-			return false, kverrors.New(kverrors.InvalidTTL, op,
-				"expiration time is in the past; expired entries behave as missing ones")
-		} else {
-			exp = *expiresAt
-		}
+	if expiresAt != nil && !expiresAt.IsZero() {
+		exp = *expiresAt
 	}
 
 	v := make([]byte, len(value))

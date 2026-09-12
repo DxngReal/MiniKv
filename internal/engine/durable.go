@@ -192,9 +192,13 @@ func (d *DurableStore) Set(key string, value []byte, expiresAt *time.Time) (bool
 	d.walBytes.Store(d.wal.Size())
 
 	apply := deadline
-	existed, err := d.store.Set(key, value, &apply)
+	// applySet (not the public Set): the deadline was validated before the
+	// append, and if it lapsed during the append the entry must still be
+	// stored dead — the WAL now contains this record, so memory must agree.
+	existed, err := d.store.applySet(key, value, &apply)
 	if err != nil {
-		// The append succeeded, so the record will replay; surface loudly.
+		// Unreachable today (applySet cannot fail for validated input);
+		// surfaced loudly rather than swallowed if that ever changes.
 		return false, kverrors.Wrap(kverrors.RecoveryFailure, op, err,
 			"the WAL append succeeded but the in-memory apply failed; recovery will restore this key on restart")
 	}
