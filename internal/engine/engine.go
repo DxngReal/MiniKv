@@ -40,6 +40,11 @@ type Engine interface {
 	Keys() ([]string, error)
 	// Snapshot returns a point-in-time copy of all live entries.
 	Snapshot() (map[string][]byte, error)
+	// SnapshotWithExpiry returns a point-in-time copy of all live entries
+	// together with their absolute expiration times. Keys without a TTL are
+	// absent from the expiration map. Persistence uses both maps to write
+	// snapshot files that preserve TTLs across restarts.
+	SnapshotWithExpiry() (map[string][]byte, map[string]time.Time, error)
 	// Stats returns counters for the status endpoint.
 	Stats() Stats
 	// Close releases resources; subsequent operations return ErrClosed.
@@ -64,6 +69,13 @@ type Stats struct {
 	ShardCount int
 	// Uptime is how long the store has been open.
 	Uptime time.Duration
+	// WALBytes is the current size of the write-ahead log in bytes.
+	WALBytes int64
+	// SnapshotEntries is the number of entries in the latest snapshot;
+	// -1 means no snapshot exists yet.
+	SnapshotEntries int64
+	// DurabilityMode is the active WAL durability mode ("always" or "never").
+	DurabilityMode string
 }
 
 // HitRate returns the fraction of Get calls that hit a live value.

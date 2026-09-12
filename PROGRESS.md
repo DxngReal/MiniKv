@@ -3,8 +3,8 @@
 ## Current Status
 
 - Project: MiniKV
-- Current phase: Phase 3 — Persistence
-- Overall progress: 0 of 6 phases complete (Phases 1–3 implemented; race test pending toolchain)
+- Current phase: Phase 4 — Interfaces
+- Overall progress: 0 of 6 phases complete (Phases 1–4 implemented; race test pending toolchain)
 - Status: In progress
 - Last updated: 2026-09-12
 - Specification: `docs/MASTER_BUILD_PROMPT.md`
@@ -20,6 +20,7 @@ No phase may be marked complete without factual quality-gate evidence.
 - [ ] Phase 1 — Foundation (implementation complete; blocked on `go test -race` by missing C compiler)
 - [ ] Phase 2 — Core Engine (implementation complete; same race-test blocker)
 - [ ] Phase 3 — Persistence (implementation complete; same race-test blocker)
+- [ ] Phase 4 — Interfaces (implementation complete; same race-test blocker)
 - [ ] Phase 3 — Persistence
 - [ ] Phase 4 — Interfaces
 - [ ] Phase 5 — Quality and Benchmarks
@@ -144,24 +145,31 @@ Known limitations:
 
 ## Phase 4 — Interfaces
 
-Status: Not started
+Status: Implementation complete — race test pending (environment blocker)
 
 Scope:
 
-- [ ] HTTP server + REST endpoints (SET/GET/DELETE/keys/status)
-- [ ] JSON validation, consistent HTTP errors
-- [ ] CLI commands (server/set/get/delete/keys/status/snapshot)
-- [ ] Graceful shutdown
-- [ ] HTTP + CLI integration tests
+- [x] HTTP server + REST endpoints (internal/api: PUT/GET/DELETE /v1/keys/{key}, GET /v1/keys, GET /v1/status, POST /v1/snapshot; Go 1.22 method+wildcard routing)
+- [x] JSON validation, consistent HTTP errors (error body: kind, message, hint; 400/404/405/500/503 mapping; body-size cap; ttl_ms validation incl. 0 = no expiry)
+- [x] CLI commands (internal/cli + cmd/minikv: server, set, get, delete, keys, status, snapshot; flags before or after positionals; exit codes 0/1/2)
+- [x] Graceful shutdown (SIGINT/SIGTERM → http.Shutdown → engine close; engine close verified in tests)
+- [x] HTTP + CLI integration tests (tests/: real TCP server, full CRUD, TTL expiry, restart recovery, snapshot+>WAL ordering, corrupted-WAL reported and file untouched, compiled-binary CLI flow with exit codes)
 
 Validation:
 
-- gofmt: Not run
-- go vet: Not run
-- Unit tests: Not run
-- Race tests: Not run
-- Integration tests: Not run
-- Build: Not run
+- gofmt: Passed — `gofmt -l .` empty
+- go vet: Passed — `go vet ./...` exit 0
+- Unit tests: Passed — `go test ./... -count=1` all packages ok (test-only fixes: leaked WAL handle on Windows cleanup, .exe suffix for built binary, splitArgs for flags-after-positionals)
+- Race tests: Not run — same environment blocker as Phases 1–3 (cgo requires a C toolchain; none installed)
+- Integration tests: Passed — 6 end-to-end tests in tests/ including crash-recovery and corruption handling
+- Build: Passed — `go build ./...` exit 0
+
+Known limitations:
+
+- Client subcommands require a running server (by design); no embedded single-shot mode.
+- POST /v1/snapshot requires the durable engine; plain in-memory engines return 503.
+
+---
 
 ---
 
@@ -232,11 +240,11 @@ Validation:
 
 ## Known Limitations
 
-- Project implementation has not started for phases 4–6.
+- Project implementation has not started for phases 5–6.
 - No performance numbers exist yet.
 - No phase is verified complete.
 - No release artifact exists.
-- `go test -race` is blocked on this Windows machine by a missing C toolchain (cgo requirement); Phases 2–3 concurrency verified by tests only.
+- `go test -race` is blocked on this Windows machine by a missing C toolchain (cgo requirement); Phases 2–4 concurrency verified by tests only.
 - Store.Get returns a read-only view of internal storage; callers must not mutate (documented in code).
 - No automatic WAL compaction; recovery reports corruption instead of repairing.
 
@@ -245,18 +253,18 @@ Validation:
 ## Session Handoff
 
 - Date: 2026-09-12
-- Phase: Phase 3 — Persistence (Phases 1–3 implemented)
-- Session goal: Complete Phase 3 WAL, snapshots, and crash recovery
-- Completed: Phase 1 (7257c0d) and Phase 2 (995621d) earlier. Phase 3: framed CRC32-Castagnoli WAL with append/replay, atomic snapshots (temp+fsync+rename+dirsync), recovery with corruption reporting (file+offset, never modified), ValidWALBytes helper, docs/design-decisions.md with exact binary layouts, 22 persistence tests
-- Current milestone: Phase 3 done pending race evidence
-- Files changed: internal/persistence/{persistence.go,wal.go,snapshot.go,recovery.go,persistence_test.go} (new), docs/design-decisions.md (new), PROGRESS.md
-- Commands actually run: `gofmt -w .`, `gofmt -l .`, `go build ./...`, `go vet ./...` (caught missing test import; fixed), `go test ./internal/persistence/ -count=1 -v` (caught test bug; fixed), `go test ./internal/persistence/ -count=1`, `go test ./... -count=1`
-- Test results: PASS — all 8 packages ok with -count=1 (22 persistence tests)
+- Phase: Phase 4 — Interfaces (Phases 1–4 implemented)
+- Session goal: Complete Phase 4 HTTP API, CLI, graceful shutdown, integration tests
+- Completed: Phases 1–3 committed earlier (7257c0d, 995621d, ff45b2f). Phase 4: api package (REST endpoints, JSON validation, consistent typed errors, status, snapshot endpoint, graceful shutdown), durable engine wrapper (WAL-first mutations, recovery on open, snapshot writes, WAL/snapshot stats), cli package (server + 6 client subcommands, flags anywhere, exit codes 0/1/2), full end-to-end integration suite
+- Current milestone: Phase 4 done pending race evidence
+- Files changed: internal/api/{server.go,handlers.go,handlers_test.go}, internal/cli/{server.go,client.go}, internal/engine/{engine.go,store.go,durable.go}, cmd/minikv/{main.go,main_test.go}, tests/{integration_test.go,helpers_test.go}, PROGRESS.md
+- Commands actually run: `gofmt -w .`, `gofmt -l .`, `go build ./...`, `go vet ./...`, `go test ./... -count=1`, `go test ./internal/api/ -count=1` (fixed leaked WAL handle), `go test ./tests/ -count=1 -v` (fixed .exe suffix and WALFileName reference)
+- Test results: PASS — all packages ok with -count=1; 6 integration tests pass end to end
 - Race test result: Not run — blocked: -race requires cgo, no C compiler on machine
 - go vet result: PASS — no findings
-- Benchmark result: Not run — benchmarks planned for Phase 5
+- Benchmark result: Not run — benchmarks are Phase 5
 - Build result: PASS — go build ./...
-- Known limitations: race detector unusable on this machine; no WAL compaction; recovery reports corruption without repairing
+- Known limitations: race detector unusable on this machine; client commands need a running server; no WAL compaction
 - Blockers: `go test -race` needs MinGW-w64 gcc (or equivalent) with CGO_ENABLED=1
-- Next exact action: Begin Phase 4 (Interfaces): HTTP server (internal/api) with PUT/GET/DELETE /v1/keys/{key}, GET /v1/keys, GET /v1/status, JSON validation, consistent typed errors, graceful shutdown; CLI client subcommands (internal/cli) wired to cmd/minikv; integration tests with temp data dirs
+- Next exact action: Begin Phase 5 (Quality and Benchmarks): add concurrent stress tests (GET/SET/DELETE/TTL/snapshot), benchmarks (SET/GET single-thread, mixed concurrent, TTL, WAL-enabled writes, recovery time), measure with real environment context, write docs/benchmarks.md, run go test -race when a toolchain is available
 - Git commit: (this commit)

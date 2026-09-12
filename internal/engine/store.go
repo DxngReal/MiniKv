@@ -11,6 +11,9 @@ import (
 	"minikv/internal/kverrors"
 )
 
+// Sentinel values for Stats.SnapshotEntries when no snapshot exists.
+const NoSnapshot = -1
+
 // entry is a single stored value with an optional absolute expiration.
 // A zero expiresAt means the entry never expires.
 type entry struct {
@@ -292,13 +295,22 @@ func (s *Store) Keys() ([]string, error) {
 // it, which is what the persistence layer requires to write a consistent
 // snapshot file without holding shard locks.
 func (s *Store) Snapshot() (map[string][]byte, error) {
-	const op = "engine.Snapshot"
+	data, _, err := s.SnapshotWithExpiry()
+	return data, err
+}
+
+// SnapshotWithExpiry returns a deep copy of all live entries plus their
+// absolute expiration times. The two maps are independent of the store and
+// safe for the persistence layer to write without holding shard locks.
+func (s *Store) SnapshotWithExpiry() (map[string][]byte, map[string]time.Time, error) {
+	const op = "engine.SnapshotWithExpiry"
 	if s.closed.Load() {
-		return nil, errClosed(op)
+		return nil, nil, errClosed(op)
 	}
 
 	now := time.Now()
 	out := make(map[string][]byte, 16)
+	expirations := make(map[string]time.Time)
 	for _, sh := range s.shards {
 		sh.mu.RLock()
 		for k, e := range sh.items {
@@ -308,15 +320,19 @@ func (s *Store) Snapshot() (map[string][]byte, error) {
 			v := make([]byte, len(e.value))
 			copy(v, e.value)
 			out[k] = v
+			if !e.expiresAt.IsZero() {
+				expirations[k] = e.expiresAt
+			}
 		}
 		sh.mu.RUnlock()
 	}
-	return out, nil
+	return out, expirations, nil
 }
 
-// Stats returns current counters and the number of live keys. Expired
-// entries are not counted as live; they are removed by the janitor or on
-// access, which is when ExpiredCount increases.
+// Stats returns current counters, the number of live keys, and the
+// persistence fields. The store itself reports WALBytes and
+// SnapshotEntries as "unknown" (NoSnapshot for the snapshot); the durable
+// wrapper overwrites them with real values.
 func (s *Store) Stats() Stats {
 	now := time.Now()
 	var live int64
@@ -330,14 +346,16 @@ func (s *Store) Stats() Stats {
 		sh.mu.RUnlock()
 	}
 	return Stats{
-		KeyCount:     live,
-		Puts:         s.puts.Load(),
-		Gets:         s.gets.Load(),
-		HitCount:     s.hits.Load(),
-		DeleteCount:  s.deletes.Load(),
-		ExpiredCount: s.expired.Load(),
-		ShardCount:   len(s.shards),
-		Uptime:       time.Since(s.openedAt),
+		KeyCount:        live,
+		Puts:            s.puts.Load(),
+		Gets:            s.gets.Load(),
+		HitCount:        s.hits.Load(),
+		DeleteCount:     s.deletes.Load(),
+		ExpiredCount:    s.expired.Load(),
+		ShardCount:      len(s.shards),
+		Uptime:          time.Since(s.openedAt),
+		WALBytes:        -1,
+		SnapshotEntries: NoSnapshot,
 	}
 }
 
@@ -350,6 +368,21 @@ func (s *Store) Close() error {
 		close(s.stopJan)
 		<-s.janDone
 	})
+	return nil
+}
+
+// setFromRecovery applies a recovered entry without a WAL append (the
+// record is already durable). Counters stay untouched: recovery does not
+// count as user traffic.
+func (s *Store) setFromRecovery(key string, value []byte, expiresAt *time.Time) error {
+	exp := time.Time{}
+	if expiresAt != nil {
+		exp = *expiresAt
+	}
+	sh := s.shardFor(key)
+	sh.mu.Lock()
+	defer sh.mu.Unlock()
+	sh.items[key] = entry{value: value, expiresAt: exp}
 	return nil
 }
 
