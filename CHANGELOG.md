@@ -110,6 +110,19 @@ fsync ~1.0–1.9 ms/op, recovery of 10k WAL records ~15–27 ms).
 - CI had not executed on GitHub at tag time; it now runs and passes on
   ubuntu/windows/macos (see Fixed below)
 
+### Added (unreleased)
+
+- **Group-commit fsync** for the `always` durability mode: concurrent WAL
+  appends share one fsync instead of paying one per mutation (explicit,
+  documented batching per the project's WAL rules). The durability contract
+  is unchanged — an acknowledged write was covered by a completed fsync.
+  Measured on the reference machine: concurrent durable writes (8
+  goroutines) improved ~11× (10.2 ms/op → 0.9 ms/op); the single-writer
+  path is unchanged (fsync-bound) and `never` mode still flushes per
+  append. New tests prove acknowledged appends recover after an abrupt
+  termination (no Close) under concurrency, and that append/close races
+  neither hang nor corrupt the log.
+
 ### Fixed (post-tag)
 
 - CI: the workflow was pinned to Go 1.22, whose test binaries are aborted

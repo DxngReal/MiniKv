@@ -48,6 +48,31 @@ measured Set at 440 ns/op and recovery at 62.8 ms — run-to-run variance on
 this shared, low-power machine is large; treat all numbers as indicative
 for this CPU class, not as absolute constants.
 
+## Group-commit A/B (measured 2026-09-12, after v0.1.0)
+
+`BenchmarkWALAppendDurabilityAlwaysConcurrent` (8 goroutines, durable
+writes) was added with group-commit fsync. Controlled back-to-back
+comparison (same command, `-benchtime=2s`, baseline obtained by stashing
+only the WAL change):
+
+| Benchmark | Baseline | Group commit |
+| --- | ---: | ---: |
+| WAL always, 1 goroutine | 1.097 ms/op | 1.103 ms/op |
+| WAL always, 8 goroutines | 1.092–10.15 ms/op | 0.83–1.46 ms/op |
+
+- Serial path: unchanged within noise — it is fsync-bound (~1.1 ms/op on
+  this machine), as intended. The leader/follower design performs the
+  flush+fsync inline for the first waiting writer, so no goroutine hop is
+  added.
+- Concurrent path: the baseline's serialized fsyncs amplify machine noise
+  (observed 1.1–10.2 ms/op across the day); with group commit the same
+  benchmark held 0.83–1.46 ms/op across repeated runs. Best observed
+  improvement ≈11× (10.15 → 0.93 ms/op in one A/B); the more important
+  effect is that durable-write latency under load stopped swinging.
+- Durability semantics are unchanged: an acknowledged append was covered
+  by a completed fsync. Verified by tests that abandon the WAL without
+  Close (simulating a kill) and recover every acknowledged record.
+
 ## Interpretation (single-goroutine unless noted, canonical run)
 
 | Benchmark | ns/op | ≈ ops/second | Notes |

@@ -235,6 +235,30 @@ func BenchmarkWALAppendDurabilityAlways(b *testing.B) {
 	}
 }
 
+// BenchmarkWALAppendDurabilityAlwaysConcurrent measures durable writes with
+// 8 goroutines writing concurrently — the workload group-commit batching
+// targets. Before batching (one fsync per Append), ns/op is dominated by
+// serial fsync latency; after batching, ns/op reflects fsync cost divided
+// across the average batch size.
+func BenchmarkWALAppendDurabilityAlwaysConcurrent(b *testing.B) {
+	dir := b.TempDir()
+	eng, err := Open(dir, persistence.DurabilityAlways, nil)
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer eng.Close()
+	b.ResetTimer()
+	b.RunParallel(func(pb *testing.PB) {
+		i := 0
+		for pb.Next() {
+			if _, err := eng.Set(fmt.Sprintf("key-%d", i%50000), []byte("value-payload-32-bytes-long!!!!"), nil); err != nil {
+				b.Fatal(err)
+			}
+			i++
+		}
+	})
+}
+
 // BenchmarkRecovery10k measures how long opening (snapshot+WAL recovery)
 // takes for a known dataset: 10,000 WAL SET records, no snapshot.
 func BenchmarkRecovery10k(b *testing.B) {

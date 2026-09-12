@@ -373,6 +373,45 @@ Known limitations:
 - Next exact action: none — project remains complete; optional follow-ups are tagging v0.1.0 and adding a remote so CI can run
 - Git commit: e5dd451 (final release commit; any PROGRESS.md-only update committed separately)
 
+## Session Handoff — runner session 5 (2026-09-12, group-commit fsync)
+
+- Goal: implement the roadmap's group-commit fsync item (explicit,
+  documented batching of concurrent WAL appends under DurabilityAlways)
+- Done: leader/follower group commit in internal/persistence/wal.go — the
+  first waiting append performs the batch's flush+fsync inline (serial path
+  unchanged, no goroutine hop); appends arriving during a sync share later
+  rounds; FIFO order; 512-waiter cap (walMaxSyncBatch); Close waits for the
+  active leader to drain before the final flush/sync/close; a lost
+  append-vs-close race returns a typed StoreClosed error, never a hang.
+  Verified: 5 new tests including abandon-without-Close crash-durability
+  proofs (serial + 16-goroutine concurrent) and a 20-iteration
+  append/close race test; gofmt/vet/build clean; go test -count=1 and
+  go test -race -count=1 all packages ok; group-commit tests run 5x
+  consecutively; controlled A/B (stash baseline vs new, -benchtime=2s):
+  serial 1.097 vs 1.103 ms/op (unchanged), concurrent 1.09–10.15 ms/op
+  baseline vs 0.83–1.46 ms/op with batching (best ≈11×). Docs updated:
+  design-decisions §5.0, recovery.md durability table, README feature,
+  roadmap (item moved to Delivered), CHANGELOG (unreleased),
+  benchmarks.md A/B table.
+- Files changed: internal/persistence/wal.go,
+  internal/persistence/wal_groupcommit_test.go (new),
+  internal/engine/durable_test.go (new concurrent WAL benchmark),
+  docs/{design-decisions,recovery,benchmarks,roadmap}.md, README.md,
+  CHANGELOG.md, PROGRESS.md
+- Commands actually run: gofmt -l/-w, go vet ./..., go build ./...,
+  go test ./... -count=1, go test -race -count=1 ./... (CGO_ENABLED=1,
+  cached portable gcc), go test -run GroupCommit -count=5,
+  go test -bench=. -benchmem ./internal/engine/ (pre/post), two stashed
+  A/B benchmark runs
+- Test results: PASS — all packages ok (-count=1)
+- Race test result: PASS — zero race reports
+- go vet result: PASS — no findings
+- Benchmark result: PASS — group-commit A/B recorded in
+  docs/benchmarks.md; full suite re-run, in-memory benches unchanged
+- Blockers: none
+- Next exact action: commit, push, watch CI
+- Git commit: (this session's feature commit)
+
 ## Session Handoff — runner session 4 (2026-09-12, remote + CI)
 
 - Goal: add the GitHub remote, push master + v0.1.0, get CI green on real

@@ -79,8 +79,13 @@ compaction (see `docs/design-decisions.md` §5.3).
 
 | Mode | fsync | Acknowledged write lost on power cut? |
 | --- | --- | --- |
-| `always` (default) | per mutation | No |
-| `never` | never | Possibly the most recent writes |
+| `always` (default) | per mutation (batched: concurrent writes share one fsync, group commit) | No |
+| `never` | never (flushed per append) | Possibly the most recent writes |
+
+Under `always`, concurrent appends share fsyncs — the first waiting writer
+performs the flush+fsync for its whole batch. The guarantee is unchanged:
+anything acknowledged was covered by a completed fsync before the
+acknowledgment was sent. Details in `docs/design-decisions.md` §5.0.
 
 `never` exists for benchmarks and experiments. Do not use it for data you
 care about.

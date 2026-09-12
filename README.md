@@ -25,7 +25,8 @@ personally.
 - `GET`, `SET`, `DELETE`, and key listing over an HTTP REST API
 - Optional per-key TTL expiration
 - Safe concurrent access via sharded locks
-- Durable mutations through a checksummed write-ahead log (fsync per mutation)
+- Durable mutations through a checksummed write-ahead log (fsync per mutation;
+  concurrent writes share fsyncs via group commit)
 - Atomic snapshots and crash recovery
 - A single cross-platform binary with both server and client subcommands
 

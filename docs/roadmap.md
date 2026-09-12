@@ -11,13 +11,16 @@ below are learning-oriented extensions, not promises.
 - HTTP REST API and CLI in one binary
 - CI on three platforms, Docker image
 
+## Delivered since v0.1.0
+
+- **Group-commit fsync** (2026-09-12) — concurrent appends share fsyncs;
+  ~11× faster concurrent durable writes on the reference machine, durability
+  guarantee unchanged. See `docs/design-decisions.md` §5.0.
+
 ## Next candidates
 
 - **WAL compaction** — snapshot + truncate the log automatically at a size
   threshold, with a documented, explicit manual path preserved.
-- **Group-commit fsync** — batch concurrent appends into one fsync to cut
-  the dominant cost of durable writes (~85× vs. buffered on the reference
-  machine).
 - **Rate-limit / max-keys settings** — simple resource guards for the HTTP
   API.
 - **Metrics endpoint** — expose the Stats counters in Prometheus text
