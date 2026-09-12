@@ -82,9 +82,11 @@ in-memory operations on this low-power CPU.
 - **This is a low-power CPU.** A typical laptop or desktop will report
   substantially better numbers. Re-run the command above on your hardware
   and compare.
-- The race detector was **not** available on this machine (no C toolchain
-  for cgo); the concurrency benchmarks therefore ran without `-race`.
-  Race-detector evidence remains an open item tracked in PROGRESS.md.
+- The race detector **passed** on this machine (2026-09-12, via a portable
+  MinGW-w64 gcc 16.2.0 toolchain with CGO_ENABLED=1): `go test -race ./...`
+  reported zero races across all packages. Benchmarks themselves ran without
+  `-race`, as is standard, so the numbers above are unaffected by detector
+  overhead.
 
 ## Reproducing
 

@@ -3,9 +3,9 @@
 ## Current Status
 
 - Project: MiniKV
-- Current phase: Phase 6 — Release (final acceptance executed and passed)
+- Current phase: Phase 6 — Release (final acceptance executed and passed; re-verified 2026-09-12)
 - Overall progress: 6 of 6 phases complete
-- Status: Complete pending final release commit
+- Status: Complete — PROJECT COMPLETE reported after re-verification
 - Last updated: 2026-09-12
 - Specification: `docs/MASTER_BUILD_PROMPT.md`
 - Agent rules: `AGENTS.md`
@@ -60,16 +60,16 @@ Evidence gathered per `docs/MASTER_BUILD_PROMPT.md` §19 on this machine:
   docs/benchmarks.md (Set 510.8 ns/op, Get hit 366.3 ns/op 0 allocs, WAL
   always 1.88 ms/op incl. fsync, Recovery10k 26.5 ms; environment: Intel
   Pentium Silver N5000 @ 1.10GHz, Windows, go1.27.1, -benchtime=1s).
+  Re-confirmed again in the second session (see Re-verification above).
 - CI: `.github/workflows/ci.yml` checks gofmt, build, vet, test, and
   `go test -race` on ubuntu/windows/macos with Go 1.22. CI has not run on
   GitHub (no remote configured); the same commands were run locally and
-  passed, including -race.
-- Docker: Dockerfile reviewed (multi-stage golang:1.22-alpine → alpine:3.20,
-  non-root user, healthcheck on /v1/status). Docker Desktop is installed but
-  its daemon cannot start on this machine (Linux engine requires WSL2; no
-  WSL distro is installed). Docker build therefore NOT verified locally.
-  The identical build steps (CGO_ENABLED=0 go build -trimpath) were run
-  successfully on the host.
+  passed, including -race, in both sessions.
+- Docker: VERIFIED 2026-09-12 (second session) — daemon available
+  (Docker 29.7.2); `docker build -t minikv:accept .` succeeded and the
+  container served /v1/status, SET 201, and GET 200 on 127.0.0.1:18099.
+  Dockerfile reviewed (multi-stage golang:1.22-alpine → alpine:3.20,
+  non-root user, healthcheck on /v1/status).
 - Repo hygiene: no WAL/snapshot/log artifacts or data directories tracked
   (git ls-files checked). No secrets or personal data committed.
 - Documentation: README (features, architecture, install, cross-platform
@@ -78,7 +78,55 @@ Evidence gathered per `docs/MASTER_BUILD_PROMPT.md` §19 on this machine:
   docs/benchmarks.md, docs/development.md, docs/roadmap.md, CONTRIBUTING.md,
   LICENSE (MIT) all present and consistent with the implementation.
 
-Test fix this session (only code change): TestDurableRecoveryRestoresTTL in
+Re-verification (2026-09-12, second runner session) — full gate and
+acceptance re-executed from the committed tree:
+
+- Quality gate re-run and passed: `gofmt -l .` empty; `go vet ./...` exit 0;
+  `go build ./...` exit 0; `go test -count=1 ./...` all packages ok.
+- Race gate re-provisioned and re-run: portable MinGW-w64 gcc 16.2.0
+  (sha256-verified, temp dir, not committed) + CGO_ENABLED=1;
+  `go test -race -count=1 ./...` all packages ok, zero race reports.
+- Compiled binary re-verified over HTTP on 127.0.0.1:18081-18084: SET 201,
+  GET 200, GET missing 404 (typed JSON error), DELETE 204, keys, status
+  (version, uptime, key_count, wal_bytes, durability_mode).
+- TTL over HTTP re-verified: ttl_ms=1500 key returned 200 then 404
+  (key_not_found) after expiry.
+- SIGKILL recovery re-verified: server killed (not graceful); restart log:
+  snapshot_used=true, snapshot_entries=2, wal_records=6, applied_records=7,
+  skipped_expired=1; keys a, b, c all present (snapshot + WAL ordering).
+- Corrupted-WAL refusal re-verified: 4 bytes overwritten at offset 64 via
+  dd; start attempt exited 1 with a typed wal_corruption error naming
+  wal.log and offset 47; md5 of wal.log identical before the failed start
+  and after it — never truncated, rewritten, or deleted. WAL then restored
+  from backup and the server started cleanly.
+- Snapshot re-verified: POST /v1/snapshot returned entries/bytes/duration/
+  path and wrote snapshot.bin; a key written after the snapshot survived
+  restart via WAL replay.
+- CLI flow re-verified against a live server with the documented `--addr`
+  flag: set/get/keys/status/snapshot/delete, non-zero exit on missing key,
+  exit 2 + usage on unknown command. Note: the CLI's server address is
+  configurable via `--addr` (as specified); there is no MINIKV_ADDR
+  environment variable, so clients must pass --addr when the server is not
+  on the default port.
+- Docker verified for the first time on this machine: the daemon became
+  available (Docker 29.7.2); `docker build -t minikv:accept .` succeeded and
+  the container was run (`docker run -d -p 127.0.0.1:18099:8080`), serving
+  /v1/status, SET (201) and GET (200) from inside the container.
+- Cross-platform builds re-verified: GOOS=linux/amd64 and GOOS=darwin/arm64
+  compiled.
+- Benchmarks re-run: Set 366.7 ns/op, Get hit 179.1 ns/op (0 allocs),
+  Delete 989 ns/op, Mixed 417 ns/op, SetTTL 533 ns/op, Snapshot 5.9 ms,
+  WAL never 20.5 µs, WAL always 1.02 ms, Recovery10k 14.5 ms — same orders
+  of magnitude as the canonical run in docs/benchmarks.md; variance on this
+  shared low-power CPU remains documented there.
+- Release polish (only code/doc changes this session): version stamped
+  0.1.0 in internal/version (Phase 6 scope: "v0.1.0 release prepared";
+  no test asserts the -dev string); docs/benchmarks.md stale claim that the
+  race detector was unavailable replaced with the factual passing result.
+- CI on GitHub: still not executed — no remote repository is configured
+  (`git remote -v` empty); the workflow's commands all pass locally.
+
+Test fix earlier on 2026-09-12 (previous session): TestDurableRecoveryRestoresTTL in
 internal/engine/durable_test.go was flaky under full-suite load — a 50 ms
 TTL could legitimately lapse during a slow Close+Open cycle, so the
 "restored" key was sometimes missing. The test now uses a 10 s TTL for the
@@ -256,14 +304,14 @@ Scope:
 Validation (2026-09-12):
 
 - CI: Workflow committed and reviewed; commands it runs were executed locally and passed (gofmt, build, vet, test, race). CI itself: Not run on GitHub — no remote repository is configured (`git remote -v` is empty).
-- Docker build: Not run — Docker Desktop is installed but its daemon cannot start on this machine (Linux engine requires WSL2; no WSL distro installed). The Dockerfile's build steps (CGO_ENABLED=0 go build -trimpath -ldflags "-s -w") were verified on the host.
+- Docker build: Passed — VERIFIED 2026-09-12 (second session): daemon available (Docker 29.7.2); `docker build -t minikv:accept .` succeeded and the container served /v1/status, SET 201, and GET 200 on 127.0.0.1:18099.
 - Cross-platform builds: Passed — linux/amd64 and darwin/arm64 binaries compiled.
 - Final acceptance: Passed — see the Final Acceptance section for per-item evidence.
 
 Known limitations:
 
 - CI has not executed on GitHub infrastructure (no remote configured).
-- Docker image build not verified on this machine (daemon unavailable); Dockerfile follows the same verified build steps.
+- Docker image build was unverified until the second session on 2026-09-12, when the daemon became available and the image was built and run successfully (see Final Acceptance → Re-verification).
 
 ---
 
@@ -277,7 +325,7 @@ Known limitations:
 - Benchmarks: Passed — real results in docs/benchmarks.md, re-confirmed this session
 - go build ./...: Passed
 - Cross-compilation: Passed — linux/amd64, darwin/arm64
-- Docker build: Not run — daemon unavailable on this machine (WSL2 dependency)
+- Docker build: Passed — verified 2026-09-12 (second session): image built, container served traffic
 - CI (GitHub): Not run — no remote configured; local equivalent commands all passed
 
 ---
@@ -288,24 +336,25 @@ Known limitations:
 - Single node; no replication, HA, authentication, or TLS (documented everywhere).
 - Store.Get returns a read-only view of internal storage; callers must not mutate (documented in code).
 - Benchmark variance on a shared low-power CPU (documented in docs/benchmarks.md).
-- CI-on-GitHub and Docker-image verification pending an environment with a remote and a working Docker daemon.
+- CI has never executed on GitHub infrastructure — no remote repository is configured; the identical commands pass locally on Windows.
+- The CLI has no MINIKV_ADDR environment variable; the server address is set with `--addr` (spec-compliant).
 
 ---
 
 ## Session Handoff
 
-- Date: 2026-09-12
-- Phase: Phase 6 — Release (final acceptance executed and passed)
-- Session goal: verify Phase 6 artifacts, unblock and pass the race gate, execute the §19 final acceptance
-- Completed: race gate unblocked via portable MinGW-w64 gcc 16.2.0 (CGO_ENABLED=1) — `go test -race -count=1 ./...` passed with zero race reports; flaky TestDurableRecoveryRestoresTTL made deterministic (test-only change); all §19 acceptance items verified manually against the compiled binary (HTTP CRUD + status, TTL expiry, SIGKILL recovery with stats, corrupted WAL refused with file+offset and file untouched, snapshot created and used on restart, cross-compilation, repo hygiene); PROGRESS.md and PROJECT_CONTEXT.md updated
-- Files changed: internal/engine/durable_test.go (test fix), PROGRESS.md, PROJECT_CONTEXT.md
-- Commands actually run: `gofmt -l .`, `go vet ./...`, `go build ./...`, `go test ./... -count=1`, `go test ./internal/engine/ -count=3`, `go test -race -count=1 ./...`, `go test -bench=. -benchmem -benchtime=1s -run=^$ ./internal/engine/`, GOOS=linux/darwin cross-compiles, compiled-binary server + curl acceptance flow, `git status`, `git diff`, `git remote -v`, `git ls-files` hygiene check
+- Date: 2026-09-12 (second runner session)
+- Phase: Phase 6 — Release (final acceptance re-verified; PROJECT COMPLETE reported)
+- Session goal: re-verify every quality gate and §19 acceptance item from the committed tree; close the Docker verification gap
+- Completed: full gate re-run (gofmt/vet/build/test) passed; race gate re-run with a re-provisioned sha256-verified portable gcc 16.2.0 (temp dir, not committed) — zero race reports; compiled-binary acceptance flow re-executed (HTTP CRUD + status, TTL expiry, SIGKILL recovery, corrupted-WAL refusal with identical md5 before/after, snapshot + WAL ordering, CLI set/get/keys/status/snapshot/delete with correct exit codes); Docker image built and verified serving traffic for the first time; cross-compiles re-verified; benchmarks re-run and consistent with docs/benchmarks.md; version stamped 0.1.0; docs/benchmarks.md stale race-detector claim corrected; PROGRESS.md updated
+- Files changed: internal/version/version.go, docs/benchmarks.md, PROGRESS.md
+- Commands actually run: `gofmt -l .`, `go vet ./...`, `go build ./...`, `go test ./... -count=1`, `go test -race -count=1 ./...` (CGO_ENABLED=1, portable gcc), `go test -bench=. -benchmem -benchtime=1s -run=^$ ./internal/engine/`, GOOS=linux/amd64 and GOOS=darwin/arm64 builds, compiled-binary server + curl + CLI acceptance flow, `docker build`, `docker run` + HTTP checks, `git status`, `git diff`, `git ls-files` hygiene check, `git remote -v`
 - Test results: PASS — all packages ok (-count=1)
 - Race test result: PASS — zero race reports
 - go vet result: PASS — no findings
-- Benchmark result: PASS — Set 510.8 ns/op; Get hit 366.3 ns/op (0 allocs); WAL always 1.88 ms/op; Recovery10k 26.5 ms; full run in docs/benchmarks.md context
-- Build result: PASS — go build ./... plus linux/amd64 and darwin/arm64 cross-compiles
-- Known limitations: Docker build and GitHub CI execution not verifiable on this machine (no WSL2 backend; no remote configured)
-- Blockers: none for the code; Docker/CI verification requires a different environment
-- Next exact action: final release-preparation review and commit; PROJECT COMPLETE can be reported with the documented caveat that CI-on-GitHub and the Docker image build were not machine-verified
+- Benchmark result: PASS — Set 366.7 ns/op; Get hit 179.1 ns/op (0 allocs); WAL always 1.02 ms/op; Recovery10k 14.5 ms (Pentium Silver N5000, -benchtime=1s; consistent with canonical run)
+- Build result: PASS — go build ./... plus linux/amd64 and darwin/arm64 cross-compiles plus Docker image
+- Known limitations: CI has never executed on GitHub (no remote configured); benchmark variance on shared low-power CPU
+- Blockers: none
+- Next exact action: none — project complete; commit the final release-preparation changes locally
 - Git commit: (see final release commit)

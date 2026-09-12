@@ -14,7 +14,8 @@
 
 ## 2. Current Status
 
-- Current phase: Phase 6 — Release (all 6 phases complete; final acceptance passed 2026-09-12)
+- Current phase: Phase 6 — Release (all 6 phases complete; final acceptance passed and re-verified 2026-09-12)
+- Version: 0.1.0 (stamped in internal/version)
 - Completed: 6 of 6
 - Source of truth: `docs/MASTER_BUILD_PROMPT.md`
 - Progress tracking: `PROGRESS.md` (per-phase evidence and final acceptance)
