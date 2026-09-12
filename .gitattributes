@@ -1,0 +1,4 @@
+# Normalize line endings: the repository stores LF and checks out LF on
+# every platform, so gofmt-based CI checks behave identically on
+# ubuntu/windows/macos runners.
+* text=auto eol=lf
