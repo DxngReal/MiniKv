@@ -409,8 +409,10 @@ Known limitations:
 - Benchmark result: PASS — group-commit A/B recorded in
   docs/benchmarks.md; full suite re-run, in-memory benches unchanged
 - Blockers: none
-- Next exact action: commit, push, watch CI
-- Git commit: (this session's feature commit)
+- Next exact action: none — feature merged; CI watched
+- Git commit: 2ac9a66 (rebased on f55c8c0, a README commit made via the
+  GitHub web UI, after the first push was rejected non-fast-forward; CI run
+  34706929357 then passed on ubuntu/windows/macos including -race)
 
 ## Session Handoff — runner session 4 (2026-09-12, remote + CI)
 
