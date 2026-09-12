@@ -109,3 +109,11 @@ fsync ~1.0–1.9 ms/op, recovery of 10k WAL records ~15–27 ms).
   must not mutate it
 - CI has not executed on GitHub infrastructure (no remote configured
   at release time); the identical commands pass locally
+
+### Fixed (post-tag)
+
+- CI: the workflow was pinned to Go 1.22, whose test binaries are aborted
+  by the macOS 15 (arm64) loader at startup (`dyld: missing LC_UUID load
+  command`) on `macos-latest` runners. CI now uses Go 1.27 — the toolchain
+  the project is developed and verified with; `go.mod`'s language level
+  (1.22) is unchanged.

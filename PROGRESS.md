@@ -325,12 +325,24 @@ Known limitations:
 - Benchmarks: Passed — real results in docs/benchmarks.md, re-confirmed this session
 - go build ./...: Passed
 - Cross-compilation: Passed — linux/amd64, darwin/arm64
+- CI (GitHub): **Executed 2026-09-12** on https://github.com/DxngReal/MiniKv — run
+  34703119240 (Go 1.22): ubuntu test+vet passed, race cancelled by fail-fast;
+  macos-latest FAILED at test startup (dyld 'missing LC_UUID load command',
+  abort trap — known Go <=1.22 vs macOS 15 arm64 loader incompatibility, not
+  a test failure); windows cancelled by fail-fast. Fix: CI pinned to Go 1.27
+  (the development toolchain; go.mod language level stays 1.22).
 - Docker build: Passed — verified 2026-09-12 (second session): image built, container served traffic
 - CI (GitHub): Not run — no remote configured; local equivalent commands all passed
 
----
+---## Repository & CI Status (updated 2026-09-12)
 
-## Known Limitations
+- Remote: https://github.com/DxngReal/MiniKv (public) — master pushed and
+  tracking origin; tag v0.1.0 pushed
+- CI run 34703119240 (push of 662484c, Go 1.22): ubuntu PASS through test
+  step; macos FAIL (dyld LC_UUID abort, Go 1.22 test binaries on macOS 15
+  arm64); windows cancelled (fail-fast). CI Go version pinned to 1.27 in
+  .github/workflows/ci.yml; re-run pending.
+
 
 - No automatic WAL compaction; recovery reports corruption instead of repairing (operator procedure documented in docs/recovery.md).
 - Single node; no replication, HA, authentication, or TLS (documented everywhere).
@@ -354,7 +366,7 @@ Known limitations:
 - go vet result: PASS — no findings
 - Benchmark result: Not run this session — prior sessions' runs (2026-09-12) are recorded in docs/benchmarks.md and the Global Validation Summary; no code changed since
 - Build result: PASS — go build ./...; Docker image from HEAD serves v0.1.0
-- Known limitations: CI has never executed on GitHub (no remote configured); benchmark variance on shared low-power CPU
+- Known limitations: benchmark variance on shared low-power CPU; CI-on-GitHub executed 2026-09-12 with a macOS Go-toolchain fix applied (re-run pending)
 - Blockers: none
 - Next exact action: none — project remains complete; optional follow-ups are tagging v0.1.0 and adding a remote so CI can run
 - Git commit: e5dd451 (final release commit; any PROGRESS.md-only update committed separately)
