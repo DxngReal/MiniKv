@@ -3,8 +3,8 @@
 ## Current Status
 
 - Project: MiniKV
-- Current phase: Phase 2 — Core Engine
-- Overall progress: 0 of 6 phases complete (Phases 1–2 implemented; race test pending toolchain)
+- Current phase: Phase 3 — Persistence
+- Overall progress: 0 of 6 phases complete (Phases 1–3 implemented; race test pending toolchain)
 - Status: In progress
 - Last updated: 2026-09-12
 - Specification: `docs/MASTER_BUILD_PROMPT.md`
@@ -19,6 +19,7 @@ No phase may be marked complete without factual quality-gate evidence.
 
 - [ ] Phase 1 — Foundation (implementation complete; blocked on `go test -race` by missing C compiler)
 - [ ] Phase 2 — Core Engine (implementation complete; same race-test blocker)
+- [ ] Phase 3 — Persistence (implementation complete; same race-test blocker)
 - [ ] Phase 3 — Persistence
 - [ ] Phase 4 — Interfaces
 - [ ] Phase 5 — Quality and Benchmarks
@@ -111,6 +112,34 @@ Validation:
 - Crash-recovery tests: Not run
 - Build: Not run
 
+## Phase 3 — Persistence
+
+Status: Implementation complete — race test pending (environment blocker)
+
+Scope:
+
+- [x] WAL format and framing (30-byte header: magic "KVMK", version, op, klen, vlen, expiration; little-endian)
+- [x] CRC32 checksums (Castagnoli, over everything after the magic; bounds-checked lengths to prevent huge allocations)
+- [x] WAL append and replay (Append flushes + fsyncs under DurabilityAlways; replay reports file and byte offset)
+- [x] Snapshot creation (atomic) — temp file, fsync, close, rename, best-effort dir sync; failures leave the old snapshot intact
+- [x] Crash recovery (Recover: latest snapshot, then all WAL records, expired SETs skipped and counted)
+- [x] Corruption reporting (typed WALCorruption/SnapshotFailure errors with file + offset; ValidWALBytes exposes the intact prefix; files never modified or deleted)
+- [x] Persistence tests (22 tests: roundtrip, 8 corruption cases, reopen-append, snapshot+>WAL ordering, torn tail, applier failure, idempotent close, bad data dir)
+
+Validation:
+
+- gofmt: Passed — `gofmt -w .` clean (`gofmt -l .` empty)
+- go vet: Passed — `go vet ./...` exit 0 (caught a missing test import; fixed)
+- Unit tests: Passed — `go test ./... -count=1` all 8 packages ok (one test bug fixed: empty-key entry was rejected by Encode as designed)
+- Race tests: Not run — same environment blocker as Phases 1–2 (cgo requires a C toolchain; none installed)
+- Crash-recovery tests: Passed — torn-tail and corrupted-byte scenarios verified; corrupted file byte-identical after recovery
+- Build: Passed — `go build ./...` exit 0
+
+Known limitations:
+
+- No WAL compaction in v0.1.0 (documented in docs/design-decisions.md §5.3); WAL grows until the operator acts.
+- Recovery is not linearizable with concurrent writes (recovery runs before the server accepts traffic; documented).
+
 ---
 
 ## Phase 4 — Interfaces
@@ -192,7 +221,7 @@ Validation:
 - gofmt: Passed (2026-09-12, after each milestone)
 - go vet ./...: Passed (2026-09-12)
 - go test ./...: Passed (2026-09-12) — all 7 packages ok, -count=1
-- go test -race ./...: Not run — requires cgo; no C compiler installed (gcc not found). Impact: concurrency correctness not machine-verified for the Phase 2 store. Next: install MinGW-w64 or validate on a machine with a C toolchain.
+- go test -race ./...: Not run — requires cgo; no C compiler installed (gcc not found). Impact: concurrency correctness not machine-verified for the Phase 2 store and Phase 3 WAL/snapshot code. Next: install MinGW-w64 or validate on a machine with a C toolchain.
 - Integration tests: Not applicable yet (harness sanity test runs inside `go test ./...`)
 - Benchmarks: Not run (no benchmarks exist yet)
 - go build ./...: Passed (2026-09-12)
@@ -203,30 +232,31 @@ Validation:
 
 ## Known Limitations
 
-- Project implementation has not started for phases 3–6.
+- Project implementation has not started for phases 4–6.
 - No performance numbers exist yet.
 - No phase is verified complete.
 - No release artifact exists.
-- `go test -race` is blocked on this Windows machine by a missing C toolchain (cgo requirement); Phase 2 concurrency verified by tests only.
+- `go test -race` is blocked on this Windows machine by a missing C toolchain (cgo requirement); Phases 2–3 concurrency verified by tests only.
 - Store.Get returns a read-only view of internal storage; callers must not mutate (documented in code).
+- No automatic WAL compaction; recovery reports corruption instead of repairing.
 
 ---
 
 ## Session Handoff
 
 - Date: 2026-09-12
-- Phase: Phase 2 — Core Engine (Phases 1–2 implemented)
-- Session goal: Complete Phase 2 sharded store with TTL, stats, and tests
-- Completed: Phase 1 committed earlier (7257c0d): module, error model, logging, config, Engine contract, CLI entry, docs. Phase 2: sharded Store implementing Engine (Get/Set/Delete/Keys/Snapshot/Stats/Close), lazy + janitor TTL, copy semantics, unit + concurrent tests
-- Current milestone: Phase 2 done pending race evidence
-- Files changed: internal/engine/store.go (new), internal/engine/ttl.go (new), internal/engine/store_test.go (new), PROGRESS.md
-- Commands actually run: `gofmt -w .`, `go build ./...`, `go vet ./...`, `go test ./...` (caught unused import; fixed), `go test ./... -count=1`, `go test ./internal/engine/ -count=1`, `go test ./internal/engine/ -count=1 -race` (failed: cgo/gcc missing)
-- Test results: PASS — all 7 packages ok with -count=1
+- Phase: Phase 3 — Persistence (Phases 1–3 implemented)
+- Session goal: Complete Phase 3 WAL, snapshots, and crash recovery
+- Completed: Phase 1 (7257c0d) and Phase 2 (995621d) earlier. Phase 3: framed CRC32-Castagnoli WAL with append/replay, atomic snapshots (temp+fsync+rename+dirsync), recovery with corruption reporting (file+offset, never modified), ValidWALBytes helper, docs/design-decisions.md with exact binary layouts, 22 persistence tests
+- Current milestone: Phase 3 done pending race evidence
+- Files changed: internal/persistence/{persistence.go,wal.go,snapshot.go,recovery.go,persistence_test.go} (new), docs/design-decisions.md (new), PROGRESS.md
+- Commands actually run: `gofmt -w .`, `gofmt -l .`, `go build ./...`, `go vet ./...` (caught missing test import; fixed), `go test ./internal/persistence/ -count=1 -v` (caught test bug; fixed), `go test ./internal/persistence/ -count=1`, `go test ./... -count=1`
+- Test results: PASS — all 8 packages ok with -count=1 (22 persistence tests)
 - Race test result: Not run — blocked: -race requires cgo, no C compiler on machine
 - go vet result: PASS — no findings
 - Benchmark result: Not run — benchmarks planned for Phase 5
 - Build result: PASS — go build ./...
-- Known limitations: race detector unusable on this machine; Get aliases internal storage (documented)
+- Known limitations: race detector unusable on this machine; no WAL compaction; recovery reports corruption without repairing
 - Blockers: `go test -race` needs MinGW-w64 gcc (or equivalent) with CGO_ENABLED=1
-- Next exact action: Begin Phase 3 (Persistence): implement framed WAL format (magic, version, op type, key-len, value-len, expiration, CRC32) in internal/persistence/wal.go with append + replay; then atomic snapshots and crash recovery; persistence tests with temp dirs; report corruption with file and byte offset, never truncate silently
+- Next exact action: Begin Phase 4 (Interfaces): HTTP server (internal/api) with PUT/GET/DELETE /v1/keys/{key}, GET /v1/keys, GET /v1/status, JSON validation, consistent typed errors, graceful shutdown; CLI client subcommands (internal/cli) wired to cmd/minikv; integration tests with temp data dirs
 - Git commit: (this commit)
