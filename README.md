@@ -12,6 +12,14 @@ to learn how these systems work.
 > Status: feature-complete for v0.1.0 — all phases implemented; see
 > `PROGRESS.md` for validation evidence.
 
+## Development Workflow
+
+Developed with an AI-assisted engineering workflow: a structured spec
+(docs/MASTER_BUILD_PROMPT.md), agent execution rules (AGENTS.md), and
+phase-based progress tracking (PROGRESS.md). Architecture decisions,
+implementation review, testing, and validation were performed and verified
+personally.
+
 ## Features
 
 - `GET`, `SET`, `DELETE`, and key listing over an HTTP REST API
