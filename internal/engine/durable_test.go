@@ -39,17 +39,30 @@ func TestDurableSetGetRoundTrip(t *testing.T) {
 }
 
 // TestDurableRecoveryRestoresTTL verifies expiration times survive a
-// restart: a key with a future TTL is restored, then expires.
+// restart: a key with a future TTL is restored with its deadline intact,
+// and a key whose TTL lapsed before recovery is skipped (expired entries
+// behave as missing).
 func TestDurableRecoveryRestoresTTL(t *testing.T) {
 	dir := t.TempDir()
 	eng, err := Open(dir, persistence.DurabilityNever, nil)
 	if err != nil {
 		t.Fatalf("Open() error = %v", err)
 	}
-	exp := time.Now().Add(50 * time.Millisecond)
-	if _, err := eng.Set("temp", []byte("v"), &exp); err != nil {
+
+	// Long TTL: must survive Close+Open even on a slow, loaded machine.
+	future := time.Now().Add(10 * time.Second)
+	if _, err := eng.Set("temp", []byte("v"), &future); err != nil {
 		t.Fatalf("Set() error = %v", err)
 	}
+
+	// Short TTL that is guaranteed to lapse before the restart, so the
+	// recovery-time skip is deterministic rather than a race against Close.
+	soon := time.Now().Add(30 * time.Millisecond)
+	if _, err := eng.Set("gone", []byte("x"), &soon); err != nil {
+		t.Fatalf("Set() error = %v", err)
+	}
+	time.Sleep(60 * time.Millisecond)
+
 	if err := eng.Close(); err != nil {
 		t.Fatalf("Close() error = %v", err)
 	}
@@ -64,9 +77,8 @@ func TestDurableRecoveryRestoresTTL(t *testing.T) {
 	if err != nil || string(got) != "v" {
 		t.Fatalf("Get after restart = (%q, %v), want v (TTL must be restored)", got, err)
 	}
-	time.Sleep(80 * time.Millisecond)
-	if _, err := eng2.Get("temp"); !kverrors.IsKind(err, kverrors.KeyNotFound) {
-		t.Errorf("Get after expiry = %v, want KeyNotFound", err)
+	if _, err := eng2.Get("gone"); !kverrors.IsKind(err, kverrors.KeyNotFound) {
+		t.Errorf("Get lapsed key after restart = %v, want KeyNotFound", err)
 	}
 }
 

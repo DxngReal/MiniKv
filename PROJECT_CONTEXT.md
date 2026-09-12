@@ -14,11 +14,13 @@
 
 ## 2. Current Status
 
-- Current phase: Phase 1 — Foundation
-- Completed: 0 of 6
+- Current phase: Phase 6 — Release (all 6 phases complete; final acceptance passed 2026-09-12)
+- Completed: 6 of 6
 - Source of truth: `docs/MASTER_BUILD_PROMPT.md`
-- Progress tracking: `PROGRESS.md`
+- Progress tracking: `PROGRESS.md` (per-phase evidence and final acceptance)
 - Agent rules: `AGENTS.md`
+- Quality gate: gofmt, go vet, go test, go test -race (zero reports), go build — all passing 2026-09-12
+- Note: `go test -race` on Windows requires a C toolchain (cgo); verified with a portable MinGW-w64 gcc on PATH plus CGO_ENABLED=1
 
 ---
 
