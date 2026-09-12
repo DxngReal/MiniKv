@@ -5,7 +5,7 @@
 - Project: MiniKV
 - Current phase: Phase 6 — Release (final acceptance executed and passed; re-verified 2026-09-12)
 - Overall progress: 6 of 6 phases complete
-- Status: Complete — PROJECT COMPLETE reported after re-verification
+- Status: Complete — PROJECT COMPLETE reported after re-verification (sessions 2 and 3)
 - Last updated: 2026-09-12
 - Specification: `docs/MASTER_BUILD_PROMPT.md`
 - Agent rules: `AGENTS.md`
@@ -343,18 +343,18 @@ Known limitations:
 
 ## Session Handoff
 
-- Date: 2026-09-12 (second runner session)
-- Phase: Phase 6 — Release (final acceptance re-verified; PROJECT COMPLETE reported)
-- Session goal: re-verify every quality gate and §19 acceptance item from the committed tree; close the Docker verification gap
-- Completed: full gate re-run (gofmt/vet/build/test) passed; race gate re-run with a re-provisioned sha256-verified portable gcc 16.2.0 (temp dir, not committed) — zero race reports; compiled-binary acceptance flow re-executed (HTTP CRUD + status, TTL expiry, SIGKILL recovery, corrupted-WAL refusal with identical md5 before/after, snapshot + WAL ordering, CLI set/get/keys/status/snapshot/delete with correct exit codes); Docker image built and verified serving traffic for the first time; cross-compiles re-verified; benchmarks re-run and consistent with docs/benchmarks.md; version stamped 0.1.0; docs/benchmarks.md stale race-detector claim corrected; PROGRESS.md updated
-- Files changed: internal/version/version.go, docs/benchmarks.md, PROGRESS.md
-- Commands actually run: `gofmt -l .`, `go vet ./...`, `go build ./...`, `go test ./... -count=1`, `go test -race -count=1 ./...` (CGO_ENABLED=1, portable gcc), `go test -bench=. -benchmem -benchtime=1s -run=^$ ./internal/engine/`, GOOS=linux/amd64 and GOOS=darwin/arm64 builds, compiled-binary server + curl + CLI acceptance flow, `docker build`, `docker run` + HTTP checks, `git status`, `git diff`, `git ls-files` hygiene check, `git remote -v`
+- Date: 2026-09-12 (third runner session)
+- Phase: Phase 6 — Release (PROJECT COMPLETE state maintained and re-verified)
+- Session goal: re-run the full quality gate from the committed tree and spot-verify acceptance evidence (binary HTTP flow, Docker image from HEAD)
+- Completed: gofmt/vet/build all clean; `go test -count=1 ./...` all packages ok; race gate re-run with the cached portable MinGW-w64 gcc 16.2.0 (temp dir, sha256-verified in the second session) — zero race reports; v0.1.0 binary verified serving HTTP (status shows version 0.1.0; SET 201 / GET 200 / DELETE 204); Docker image rebuilt from HEAD and container verified serving version 0.1.0 with a successful SET; no stray processes or containers left behind
+- Files changed: PROGRESS.md only
+- Commands actually run: `gofmt -l .`, `go vet ./...`, `go build ./...`, `go test ./... -count=1`, `go test -race -count=1 ./...` (CGO_ENABLED=1, portable gcc), `go build -o` binary + server + curl smoke flow, `docker build`, `docker run` + HTTP check, `tasklist`/`docker ps` stray-process check, `git status`, `git log`, `git remote -v`, `git tag`
 - Test results: PASS — all packages ok (-count=1)
 - Race test result: PASS — zero race reports
 - go vet result: PASS — no findings
-- Benchmark result: PASS — Set 366.7 ns/op; Get hit 179.1 ns/op (0 allocs); WAL always 1.02 ms/op; Recovery10k 14.5 ms (Pentium Silver N5000, -benchtime=1s; consistent with canonical run)
-- Build result: PASS — go build ./... plus linux/amd64 and darwin/arm64 cross-compiles plus Docker image
+- Benchmark result: Not run this session — prior sessions' runs (2026-09-12) are recorded in docs/benchmarks.md and the Global Validation Summary; no code changed since
+- Build result: PASS — go build ./...; Docker image from HEAD serves v0.1.0
 - Known limitations: CI has never executed on GitHub (no remote configured); benchmark variance on shared low-power CPU
 - Blockers: none
-- Next exact action: none — project complete; commit the final release-preparation changes locally
-- Git commit: (see final release commit)
+- Next exact action: none — project remains complete; optional follow-ups are tagging v0.1.0 and adding a remote so CI can run
+- Git commit: e5dd451 (final release commit; any PROGRESS.md-only update committed separately)
