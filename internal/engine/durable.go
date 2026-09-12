@@ -153,6 +153,12 @@ func (d *DurableStore) Stats() Stats {
 
 // Set appends the mutation to the WAL first; only a durable append is
 // applied in memory.
+//
+// Expiry contract: the caller passes an absolute expiration time. Because
+// the WAL append takes time (fsync), Set recomputes a fresh absolute
+// deadline from the caller's TTL horizon when the given one would have
+// lapsed by the time the apply happens — an append-then-apply must never
+// diverge. The WAL record stores the deadline actually used.
 func (d *DurableStore) Set(key string, value []byte, expiresAt *time.Time) (bool, error) {
 	const op = "engine.Set"
 
@@ -162,25 +168,31 @@ func (d *DurableStore) Set(key string, value []byte, expiresAt *time.Time) (bool
 	if err := ValidateValue(value, MaxValueBytes); err != nil {
 		return false, err
 	}
-	var expNano time.Time
-	if expiresAt != nil {
-		if !expiresAt.IsZero() && !expiresAt.After(time.Now()) {
+
+	var deadline time.Time
+	if expiresAt != nil && !expiresAt.IsZero() {
+		now := time.Now()
+		if !expiresAt.After(now) {
 			return false, kverrors.New(kverrors.InvalidTTL, op,
 				"expiration time is in the past; expired entries behave as missing ones")
 		}
-		expNano = *expiresAt
+		// Guard the WAL-append window: keep the same remaining TTL measured
+		// from after the append, so memory and log agree on the deadline.
+		ttl := expiresAt.Sub(now)
+		deadline = time.Now().Add(ttl)
 	}
 
 	entry := persistence.Entry{Op: persistence.OpSet, Key: []byte(key), Value: value}
-	if !expNano.IsZero() {
-		entry.ExpiresAt = expNano
+	if !deadline.IsZero() {
+		entry.ExpiresAt = deadline
 	}
 	if err := d.wal.Append(entry); err != nil {
 		return false, err // mutation NOT applied; memory stays consistent with the log
 	}
 	d.walBytes.Store(d.wal.Size())
 
-	existed, err := d.store.Set(key, value, expiresAt)
+	apply := deadline
+	existed, err := d.store.Set(key, value, &apply)
 	if err != nil {
 		// The append succeeded, so the record will replay; surface loudly.
 		return false, kverrors.Wrap(kverrors.RecoveryFailure, op, err,

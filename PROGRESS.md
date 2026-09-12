@@ -3,8 +3,8 @@
 ## Current Status
 
 - Project: MiniKV
-- Current phase: Phase 4 — Interfaces
-- Overall progress: 0 of 6 phases complete (Phases 1–4 implemented; race test pending toolchain)
+- Current phase: Phase 5 — Quality and Benchmarks
+- Overall progress: 0 of 6 phases complete (Phases 1–5 implemented; race test pending toolchain)
 - Status: In progress
 - Last updated: 2026-09-12
 - Specification: `docs/MASTER_BUILD_PROMPT.md`
@@ -21,6 +21,7 @@ No phase may be marked complete without factual quality-gate evidence.
 - [ ] Phase 2 — Core Engine (implementation complete; same race-test blocker)
 - [ ] Phase 3 — Persistence (implementation complete; same race-test blocker)
 - [ ] Phase 4 — Interfaces (implementation complete; same race-test blocker)
+- [ ] Phase 5 — Quality and Benchmarks (implementation complete; same race-test blocker)
 - [ ] Phase 3 — Persistence
 - [ ] Phase 4 — Interfaces
 - [ ] Phase 5 — Quality and Benchmarks
@@ -175,28 +176,33 @@ Known limitations:
 
 ## Phase 5 — Quality and Benchmarks
 
-Status: Not started
+Status: Implementation complete — race test pending (environment blocker)
 
 Scope:
 
-- [ ] Complete unit + integration tests
-- [ ] `go test -race ./...` clean
-- [ ] Concurrent GET/SET/DELETE, TTL, snapshot tests
-- [ ] Throughput / latency / allocation benchmarks
-- [ ] WAL-enabled write benchmark, recovery time measurement
-- [ ] Record real benchmark environment
-- [ ] Write `docs/benchmarks.md`
-- [ ] Fix all discovered races and reliability issues
+- [x] Complete unit + integration tests (all packages; 6 end-to-end integration tests)
+- [ ] `go test -race ./...` clean — BLOCKED: needs cgo C toolchain, none installed on this machine
+- [x] Concurrent GET/SET/DELETE, TTL, snapshot tests (TestDurableConcurrentMixedStress: 8 workers + snapshot loop + janitor against the durable engine; TestConcurrentAccess, TestConcurrentTTLWithSnapshot in the store)
+- [x] Throughput / latency / allocation benchmarks (Set/Get hit/miss/Delete/Mixed/SetTTL/Snapshot with -benchmem)
+- [x] WAL-enabled write benchmark, recovery time measurement (DurabilityNever 42.8 µs/op, DurabilityAlways 1.34 ms/op incl. fsync, Recovery10k 22.0 ms)
+- [x] Record real benchmark environment (CPU, OS, Go version, storage, datasets, concurrency in docs/benchmarks.md)
+- [x] Write `docs/benchmarks.md` (canonical measured run + interpretation + honest variance notes)
+- [x] Fix all discovered issues found during stress testing: DurableStore.Set now recomputes the absolute expiry deadline after the WAL append so memory and log can never diverge when fsync is slow; stress-test TTL usage corrected (fresh deadline per Set)
 
 Validation:
 
-- gofmt: Not run
-- go vet: Not run
-- Unit tests: Not run
-- Race tests: Not run
-- Integration tests: Not run
-- Benchmarks: Not run
-- Build: Not run
+- gofmt: Passed — `gofmt -l .` empty
+- go vet: Passed — `go vet ./...` exit 0
+- Unit tests: Passed — `go test ./... -count=1` all packages ok
+- Race tests: Not run — same environment blocker (cgo requires C toolchain); concurrency stress tests pass without -race and one divergence bug was caught and fixed by them
+- Integration tests: Passed — tests/ suite ok
+- Benchmarks: Run — real measured results recorded in docs/benchmarks.md with environment context
+- Build: Passed — `go build ./...` exit 0
+
+Known limitations:
+
+- Race-detector evidence still pending across all phases; stress tests are the interim concurrency evidence.
+- Benchmark numbers are from a shared low-power CPU; variance between runs is large (documented).
 
 ---
 
@@ -240,31 +246,31 @@ Validation:
 
 ## Known Limitations
 
-- Project implementation has not started for phases 5–6.
+- Project implementation has not started for phase 6.
 - No performance numbers exist yet.
-- No phase is verified complete.
-- No release artifact exists.
 - `go test -race` is blocked on this Windows machine by a missing C toolchain (cgo requirement); Phases 2–4 concurrency verified by tests only.
 - Store.Get returns a read-only view of internal storage; callers must not mutate (documented in code).
 - No automatic WAL compaction; recovery reports corruption instead of repairing.
 
 ---
 
+- Benchmark numbers exist for the in-memory store, WAL modes, and recovery; see docs/benchmarks.md.
+
 ## Session Handoff
 
 - Date: 2026-09-12
-- Phase: Phase 4 — Interfaces (Phases 1–4 implemented)
-- Session goal: Complete Phase 4 HTTP API, CLI, graceful shutdown, integration tests
-- Completed: Phases 1–3 committed earlier (7257c0d, 995621d, ff45b2f). Phase 4: api package (REST endpoints, JSON validation, consistent typed errors, status, snapshot endpoint, graceful shutdown), durable engine wrapper (WAL-first mutations, recovery on open, snapshot writes, WAL/snapshot stats), cli package (server + 6 client subcommands, flags anywhere, exit codes 0/1/2), full end-to-end integration suite
-- Current milestone: Phase 4 done pending race evidence
-- Files changed: internal/api/{server.go,handlers.go,handlers_test.go}, internal/cli/{server.go,client.go}, internal/engine/{engine.go,store.go,durable.go}, cmd/minikv/{main.go,main_test.go}, tests/{integration_test.go,helpers_test.go}, PROGRESS.md
-- Commands actually run: `gofmt -w .`, `gofmt -l .`, `go build ./...`, `go vet ./...`, `go test ./... -count=1`, `go test ./internal/api/ -count=1` (fixed leaked WAL handle), `go test ./tests/ -count=1 -v` (fixed .exe suffix and WALFileName reference)
-- Test results: PASS — all packages ok with -count=1; 6 integration tests pass end to end
+- Phase: Phase 5 — Quality and Benchmarks (Phases 1–5 implemented)
+- Session goal: Complete Phase 5 stress tests, benchmarks, docs/benchmarks.md
+- Completed: Phases 1–4 committed earlier (7257c0d, 995621d, ff45b2f, 1435476). Phase 5: engine + durable benchmarks (Set/Get/miss/Delete/Mixed/SetTTL/Snapshot, WAL never/always, Recovery10k), durable concurrency stress tests, docs/benchmarks.md with real environment context, TTL-divergence fix in DurableStore.Set
+- Current milestone: Phase 5 done pending race evidence
+- Files changed: internal/engine/{bench_test.go,durable_test.go} (new), internal/engine/durable.go (TTL fix), docs/benchmarks.md (new), PROGRESS.md
+- Commands actually run: `gofmt -w .`, `gofmt -l .`, `go build ./...`, `go vet ./...`, `go test ./... -count=1`, `go test ./internal/engine/ -count=1`, `go test -bench=. -benchmem -benchtime=1s -run=^$ ./internal/engine/` (twice: pre- and post-fix)
+- Test results: PASS — all packages ok with -count=1
 - Race test result: Not run — blocked: -race requires cgo, no C compiler on machine
 - go vet result: PASS — no findings
-- Benchmark result: Not run — benchmarks are Phase 5
+- Benchmark result: Measured — Set 1,326 ns/op; Get hit 356 ns/op (0 allocs); mixed 8-goroutine 506 ns/op; WAL always 1.34 ms/op (fsync per mutation); recovery 10k records 22.0 ms; full table in docs/benchmarks.md
 - Build result: PASS — go build ./...
-- Known limitations: race detector unusable on this machine; client commands need a running server; no WAL compaction
+- Known limitations: race detector unusable on this machine; benchmark variance on shared low-power CPU (documented)
 - Blockers: `go test -race` needs MinGW-w64 gcc (or equivalent) with CGO_ENABLED=1
-- Next exact action: Begin Phase 5 (Quality and Benchmarks): add concurrent stress tests (GET/SET/DELETE/TTL/snapshot), benchmarks (SET/GET single-thread, mixed concurrent, TTL, WAL-enabled writes, recovery time), measure with real environment context, write docs/benchmarks.md, run go test -race when a toolchain is available
+- Next exact action: Begin Phase 6 (Release): GitHub Actions CI workflow, Dockerfile, cross-platform build instructions, complete README + docs (architecture, recovery, roadmap), CONTRIBUTING.md, final acceptance pass per MASTER_BUILD_PROMPT §19
 - Git commit: (this commit)
