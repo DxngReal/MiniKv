@@ -145,6 +145,7 @@ and byte offset — never silently truncated or deleted. Details: `docs/recovery
 
 ## Documentation
 
+- `CHANGELOG.md` — release history and notable changes
 - `docs/architecture.md` — layers, dependency rules, write/recovery paths
 - `docs/design-decisions.md` — why it looks this way + exact binary formats
 - `docs/recovery.md` — operator guide for crashes and corruption
