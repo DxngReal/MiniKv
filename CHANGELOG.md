@@ -107,8 +107,8 @@ fsync ~1.0–1.9 ms/op, recovery of 10k WAL records ~15–27 ms).
   loopback or put a proxy in front
 - `Store.Get` returns a read-only view of internal storage; callers
   must not mutate it
-- CI has not executed on GitHub infrastructure (no remote configured
-  at release time); the identical commands pass locally
+- CI had not executed on GitHub at tag time; it now runs and passes on
+  ubuntu/windows/macos (see Fixed below)
 
 ### Fixed (post-tag)
 
@@ -117,3 +117,7 @@ fsync ~1.0–1.9 ms/op, recovery of 10k WAL records ~15–27 ms).
   command`) on `macos-latest` runners. CI now uses Go 1.27 — the toolchain
   the project is developed and verified with; `go.mod`'s language level
   (1.22) is unchanged.
+- CI: added `.gitattributes` forcing LF line endings — GitHub windows
+  runners checked out CRLF and gofmt rejected the result. With both fixes,
+  CI passes on ubuntu-latest, windows-latest, and macos-latest, including
+  the race-detector step.

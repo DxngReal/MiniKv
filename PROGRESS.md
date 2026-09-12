@@ -3,7 +3,7 @@
 ## Current Status
 
 - Project: MiniKV
-- Current phase: Phase 6 — Release (final acceptance executed and passed; re-verified 2026-09-12)
+- Current phase: Phase 6 — Release (complete; CI green on GitHub 2026-09-12)
 - Overall progress: 6 of 6 phases complete
 - Status: Complete — PROJECT COMPLETE reported after re-verification (sessions 2 and 3)
 - Last updated: 2026-09-12
@@ -325,30 +325,32 @@ Known limitations:
 - Benchmarks: Passed — real results in docs/benchmarks.md, re-confirmed this session
 - go build ./...: Passed
 - Cross-compilation: Passed — linux/amd64, darwin/arm64
-- CI (GitHub): **Executed 2026-09-12** on https://github.com/DxngReal/MiniKv — run
-  34703119240 (Go 1.22): ubuntu test+vet passed, race cancelled by fail-fast;
-  macos-latest FAILED at test startup (dyld 'missing LC_UUID load command',
-  abort trap — known Go <=1.22 vs macOS 15 arm64 loader incompatibility, not
-  a test failure); windows cancelled by fail-fast. Fix: CI pinned to Go 1.27
-  (the development toolchain; go.mod language level stays 1.22).
+- CI (GitHub): **PASSED 2026-09-12** on https://github.com/DxngReal/MiniKv —
+  run 34703911174 green on ubuntu/windows/macos including `go test -race`
+  (see Repository & CI Status for the two fixes it took: Go 1.27 pin,
+  LF .gitattributes).
 - Docker build: Passed — verified 2026-09-12 (second session): image built, container served traffic
-- CI (GitHub): Not run — no remote configured; local equivalent commands all passed
+- CI (GitHub): Passed — run 34703911174 green on ubuntu/windows/macos including -race (2026-09-12)
 
 ---## Repository & CI Status (updated 2026-09-12)
 
 - Remote: https://github.com/DxngReal/MiniKv (public) — master pushed and
   tracking origin; tag v0.1.0 pushed
-- CI run 34703119240 (push of 662484c, Go 1.22): ubuntu PASS through test
-  step; macos FAIL (dyld LC_UUID abort, Go 1.22 test binaries on macOS 15
-  arm64); windows cancelled (fail-fast). CI Go version pinned to 1.27 in
-  .github/workflows/ci.yml; re-run pending.
-
+- CI run 34703119240 (Go 1.22): macos FAIL at test startup (dyld LC_UUID
+  abort — Go <=1.22 vs macOS 15 arm64); ubuntu passed its test step before
+  fail-fast cancelled the rest
+- Fix 1 (8efffe8): CI Go version pinned to 1.27 (dev toolchain; go.mod
+  language level stays 1.22)
+- Fix 2 (4c339da): .gitattributes forces LF — windows runners checked out
+  CRLF and gofmt rejected it (reproduced locally before fixing)
+- CI run 34703911174 (push of 4c339da): SUCCESS — ubuntu-latest,
+  windows-latest, macos-latest all green including `go test -race`
+
 
 - No automatic WAL compaction; recovery reports corruption instead of repairing (operator procedure documented in docs/recovery.md).
 - Single node; no replication, HA, authentication, or TLS (documented everywhere).
 - Store.Get returns a read-only view of internal storage; callers must not mutate (documented in code).
 - Benchmark variance on a shared low-power CPU (documented in docs/benchmarks.md).
-- CI has never executed on GitHub infrastructure — no remote repository is configured; the identical commands pass locally on Windows.
 - The CLI has no MINIKV_ADDR environment variable; the server address is set with `--addr` (spec-compliant).
 
 ---
@@ -366,7 +368,32 @@ Known limitations:
 - go vet result: PASS — no findings
 - Benchmark result: Not run this session — prior sessions' runs (2026-09-12) are recorded in docs/benchmarks.md and the Global Validation Summary; no code changed since
 - Build result: PASS — go build ./...; Docker image from HEAD serves v0.1.0
-- Known limitations: benchmark variance on shared low-power CPU; CI-on-GitHub executed 2026-09-12 with a macOS Go-toolchain fix applied (re-run pending)
+- Known limitations: benchmark variance on shared low-power CPU
 - Blockers: none
 - Next exact action: none — project remains complete; optional follow-ups are tagging v0.1.0 and adding a remote so CI can run
 - Git commit: e5dd451 (final release commit; any PROGRESS.md-only update committed separately)
+
+## Session Handoff — runner session 4 (2026-09-12, remote + CI)
+
+- Goal: add the GitHub remote, push master + v0.1.0, get CI green on real
+  infrastructure
+- Done: origin added (https://github.com/DxngReal/MiniKv, public); master
+  and tag v0.1.0 pushed; gh authenticated via device flow (keyring); CI
+  executed for the first time. Run 1 failed (macOS Go 1.22 dyld abort) →
+  CI pinned to Go 1.27 (8efffe8). Run 2 failed (windows CRLF vs gofmt;
+  reproduced locally) → .gitattributes eol=lf (4c339da). Run 3
+  (34703911174) SUCCESS on ubuntu/windows/macos including the race step.
+- Files changed: .github/workflows/ci.yml, .gitattributes, CHANGELOG.md,
+  PROGRESS.md
+- Commands actually run: git remote add / push / ls-remote; GitHub REST API
+  via curl (runs, jobs, check annotations, job logs); gh auth login
+  (device flow); local gofmt/vet/build/test; CRLF gofmt reproduction test
+- Test results: local gate PASS; CI run 34703911174 PASS (3 platforms)
+- Race test result: PASS locally (session 3) and PASS in CI on all three
+  platforms
+- Benchmark result: Not run (no code changes this session)
+- Blockers: none
+- Next exact action: none required; optional — move/re-tag v0.1.0 to include
+  the CI fixes or cut v0.1.1
+- Git commit: 4c339da (+ the PROGRESS/CHANGELOG docs commit)
+
